@@ -66,12 +66,12 @@ public class SplitPdfBySectionsController {
                         .replaceFirst("[.][^.]+$", "");
         if (merge) {
             MergeController mergeController = new MergeController();
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ByteArrayOutputStream baos = new ByteArrayOutputStream(1024 * 1024);
             mergeController.mergeDocuments(splitDocuments).save(baos);
             return WebResponseUtils.bytesToWebResponse(baos.toByteArray(), filename + "_split.pdf");
         }
         for (PDDocument doc : splitDocuments) {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ByteArrayOutputStream baos = new ByteArrayOutputStream(1024 * 1024);
             doc.save(baos);
             doc.close();
             splitDocumentsBoas.add(baos);

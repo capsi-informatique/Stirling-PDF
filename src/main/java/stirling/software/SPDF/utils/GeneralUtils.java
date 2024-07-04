@@ -29,9 +29,11 @@ public class GeneralUtils {
 
     public static File convertMultipartFileToFile(MultipartFile multipartFile) throws IOException {
         File tempFile = Files.createTempFile("temp", null).toFile();
-        try (FileOutputStream os = new FileOutputStream(tempFile)) {
-            os.write(multipartFile.getBytes());
-        }
+        multipartFile.transferTo(tempFile);
+        //        try (BufferedOutputStream os = new BufferedOutputStream(new
+        // FileOutputStream(tempFile))) {
+        //            os.write(multipartFile.getBytes());
+        //        }
         return tempFile;
     }
 
