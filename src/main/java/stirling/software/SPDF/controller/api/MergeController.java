@@ -1,8 +1,10 @@
 package stirling.software.SPDF.controller.api;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -11,13 +13,9 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-import org.apache.commons.io.FileUtils;
 import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.io.IOUtils;
-import org.apache.pdfbox.multipdf.PDFMergerUtility;
-import org.apache.pdfbox.multipdf.PDFMergerUtility.DocumentMergeMode;
-import org.apache.pdfbox.pdfwriter.compress.CompressParameters;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDDocumentCatalog;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -33,11 +31,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.itextpdf.text.Document;
+import com.itextpdf.text.pdf.PdfCopy;
+import com.itextpdf.text.pdf.PdfReader;
+import com.itextpdf.text.pdf.PdfSmartCopy;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-
+import lombok.SneakyThrows;
 import stirling.software.SPDF.model.api.general.MergePdfsRequest;
-import stirling.software.SPDF.utils.GeneralUtils;
 import stirling.software.SPDF.utils.WebResponseUtils;
 
 @RestController
@@ -131,27 +133,25 @@ public class MergeController {
                     getSortComparator(
                             form.getSortType())); // Sort files based on the given sort type
 
-            PDFMergerUtility mergerUtility = new PDFMergerUtility();
-            mergerUtility.setDocumentMergeMode(DocumentMergeMode.OPTIMIZE_RESOURCES_MODE);
-
-            for (MultipartFile multipartFile : files) {
-                File tempFile =
-                        GeneralUtils.convertMultipartFileToFile(
-                                multipartFile); // Convert MultipartFile to File
-                filesToDelete.add(tempFile); // Add temp file to the list for later deletion
-                mergerUtility.addSource(tempFile); // Add source file to the merger utility
-            }
-            File outFile = File.createTempFile("out", null);
-            filesToDelete.add(outFile);
-            String outFilePath = outFile.getAbsolutePath();
-
-            mergerUtility.setDestinationFileName(outFilePath);
-            mergerUtility.mergeDocuments(
-                    IOUtils.createTempFileOnlyStreamCache(),
-                    CompressParameters.NO_COMPRESSION); // Merge the documents
-
-            byte[] mergedPdfBytes =
-                    FileUtils.readFileToByteArray(outFile); // Get merged document bytes
+            List<BufferedInputStream> inputStreams =
+                    Stream.of(files)
+                            .map(
+                                    t -> {
+                                        try {
+                                            return new BufferedInputStream(t.getInputStream());
+                                        } catch (IOException e) {
+                                            throw new IllegalStateException(e);
+                                        }
+                                    })
+                            .toList();
+            byte[] mergedPdfBytes = concat(inputStreams);
+            inputStreams.forEach(
+                    i -> {
+                        try {
+                            i.close();
+                        } catch (IOException e) {
+                        }
+                    });
 
             // Remove signatures if removeCertSign is true
             if (removeCertSign) {
@@ -197,5 +197,25 @@ public class MergeController {
                 mergedDocument.close(); // Close the merged document
             }
         }
+    }
+
+    @SneakyThrows
+    public byte[] concat(List<BufferedInputStream> docs) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream(128*1024);
+        out.reset();
+        Document document = new Document();
+        PdfReader reader = null;
+        try {
+            for (InputStream doc : docs) {
+                PdfCopy copy = new PdfSmartCopy(document, out);
+                document.open();
+                reader = new PdfReader(doc);
+                copy.addDocument(reader);
+                reader.close();
+            }
+        } finally {
+            document.close();
+        }
+        return out.toByteArray();
     }
 }
