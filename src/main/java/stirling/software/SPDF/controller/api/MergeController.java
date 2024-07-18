@@ -38,6 +38,7 @@ import com.itextpdf.text.pdf.PdfSmartCopy;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+
 import lombok.SneakyThrows;
 import stirling.software.SPDF.model.api.general.MergePdfsRequest;
 import stirling.software.SPDF.utils.WebResponseUtils;
@@ -130,8 +131,7 @@ public class MergeController {
             MultipartFile[] files = form.getFileInput();
             Arrays.sort(
                     files,
-                    getSortComparator(
-                            form.getSortType())); // Sort files based on the given sort type
+                    getSortComparator(form.getSortType())); // Sort files based on the given sort type
 
             List<BufferedInputStream> inputStreams =
                     Stream.of(files)
@@ -201,15 +201,13 @@ public class MergeController {
 
     @SneakyThrows
     public byte[] concat(List<BufferedInputStream> docs) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream(128*1024);
-        out.reset();
+        ByteArrayOutputStream out = new ByteArrayOutputStream(1024 * 1024);
         Document document = new Document();
-        PdfReader reader = null;
         try {
+            PdfCopy copy = new PdfSmartCopy(document, out);
+            document.open();
             for (InputStream doc : docs) {
-                PdfCopy copy = new PdfSmartCopy(document, out);
-                document.open();
-                reader = new PdfReader(doc);
+                PdfReader reader = new PdfReader(doc);
                 copy.addDocument(reader);
                 reader.close();
             }
